@@ -5,10 +5,13 @@
 <configuration>
 
     <!-- 根据相对路径指定到 properties 配置文件即可. -->
-    <!--<properties resource="./db.properties" />-->
+    <properties resource="./db.properties" />
 
 
-    <properties url="./db.properties" />
+    <!--<properties url="file:///D:\Java_DaiMa\idea_github_self\mybtatis-analysis\mybatis-xml-config\src\main\resources\db.properties" />-->
+<!--
+    <properties url="file://https://github.com/baoyang23/mybtatis-analysis/blob/master/mybatis-xml-config/src/main/resources/db.properties" />
+-->
 
     <environments default="development">
         <environment id="development">
