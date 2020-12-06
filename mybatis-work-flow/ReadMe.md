@@ -619,3 +619,33 @@ public Object invoke(Object proxy, Method method, Object[] args) throws Throwabl
 
 
 至此, MyBatis的入门分析流程是结束的. 理解起来,应该还不是那么难.
+
+
+
+#### 总结
+
+   根据 com.iyang.mybatis.InitHelloMyBatis , 也就是入门的demo来梳理下流程.
+
+​		   
+
+1.   读取配置文件,也就是将配置文件读取,转化为inptStream流.
+2.    利用 SqlSessionFactoryBuilder 来 解析流, 起内部又利用 BaseBuilder(其又很多实现类,这里用的XMLConfigBuilder)也解析xml配置文件. Configuration configuration 该类中是保存着xml配置文件的很多信息. 然后 DefaultSqlSessionFactory 中有configuration字段,也就是属性.
+3.  然后从 DefaultSqlSessionFactory 中获取 SqlSession来, 并且也会是否开启事务(参考:org.apache.ibatis.transaction.jdbc.JdbcTransaction)类,然后获取 Executor,Executor也是有几种种类的,也可以自己自定义,最后返回一个 DefaultSqlSession 来.
+4.   然后从 SqlSession 中获取我们的接口Mapper,  最后也是利用 Proxy.newProxyInstance 来生成的接口,也就是代理(这里打印出地址池或者debug看地址池,就会很明显的看到是代理对象).
+5.  最后走查询的方法, 也就是走到了 MapperProxy 来. 可以看到MapperProxy里面是有sqlSession的,而SqlSession是有 Executor/configuration/autoCommit等信息的, 有了sqlSession,就剩下执行sql和映射sql查询出来的结果来了(这里是 mapperMethod.execute(sqlSession, args)  --->   org.apache.ibatis.binding.MapperMethod#execute  走到这里来了,这里之后就会分类进行处理,然后映射sql语句). 
+6.  至此,一个 MyBatis 的 HelloWorld分析流程是完毕的.
+
+
+
+**接下里,会根据 MyBatis的各个点的代码来仔细分析.**
+
+
+
+最后 :     **坚持学习下去,励志成为最好的自我.**
+
+
+
+
+
+
+

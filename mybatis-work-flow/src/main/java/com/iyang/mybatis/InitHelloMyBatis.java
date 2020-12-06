@@ -25,7 +25,6 @@ public class InitHelloMyBatis {
         SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(mybatisInputStream);
 
         SqlSession session = sqlSessionFactory.openSession();
-
         BlogMapper blogMapper = session.getMapper(BlogMapper.class);
         TbBlog tbBlog = blogMapper.selectBlog(1);
         System.out.println(tbBlog);
