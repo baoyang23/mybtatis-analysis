@@ -368,7 +368,9 @@ public Configuration parse() {
 
 ---------------------------------
 // parseConfiguration
-// 这里 debug 可以看到 root 是    
+// 这里 debug 可以看到 root 是 configuration 的配置文件信息.   
+// 这里可以初步看到实对 我们的配置文件mybatis-config.xml进行解析,并且加载到 configuration中.
+// 后面我们跟着官网文档一步一步的阅读,会有专门对解析配置的源码进行分析.    
   private void parseConfiguration(XNode root) {
     try {
       //issue #117 read properties first
@@ -395,3 +397,225 @@ public Configuration parse() {
     
 ```
 
+
+
+ **build(parser.parse()) 方法**
+
+ 这里是对 parser.parse() 调用玩返回的 Configuration 传入到新创建的 DefaultSqlSessionFactory 对象中.
+
+ 也就是说,我们拿到的 SqlSessionFactory 是  DefaultSqlSessionFactory.
+
+```java
+public SqlSessionFactory build(Configuration config) {
+  return new DefaultSqlSessionFactory(config);
+}
+```
+
+
+
+**获取 SqlSession**  
+
+
+
+```java
+SqlSession session = sqlSessionFactory.openSession();
+
+// org.apache.ibatis.session.defaults.DefaultSqlSessionFactory#openSessionFromDataSource
+// 看到这个方法,直接跟进到这个方法来.
+
+  private SqlSession openSessionFromDataSource(ExecutorType execType, TransactionIsolationLevel level, boolean autoCommit) {
+    Transaction tx = null;
+    try {
+        
+// 从 configuration中获取出environment来,这里的 getEnvironment对应的是
+// 标签的 <environment>  里面的内容
+// org.apache.ibatis.mapping.Environment
+// 可以看到这个对象,id对应mybatis-config.xml中的environment id
+// datasource 对应  environment > dataSource 字段.
+      final Environment environment = configuration.getEnvironment();
+// 根据    environment 来获取 TransactionFactory,也就是MyBatis的事务工厂.
+// debug 是可以看到  environment 中是有一个JdbcTransactionFactory的,
+// 如果没用的话,就会自己new一个 ManagedTransactionFactory 来.        
+      final TransactionFactory transactionFactory = getTransactionFactoryFromEnvironment(environment);
+
+// 在 JdbcTransactionFactory 中new出了一个 JdbcTransaction
+// 也就是new了一个JDBC事务.
+// org.apache.ibatis.transaction.jdbc.JdbcTransaction,
+// 可以看到 JdbcTransaction 中有commit / rollback的方法,
+// 也就是说这个地方就是对事务进行操作的地方        
+      tx = transactionFactory.newTransaction(environment.getDataSource(), level, autoCommit);
+// 这里是获取是执行器,
+// 具体代码: org.apache.ibatis.session.Configuration#newExecutor(org.apache.ibatis.transaction.Transaction, org.apache.ibatis.session.ExecutorType)
+// 这里有 SIMPLE, REUSE, BATCH ,CachingExecutor 还可以在 plugin 中自己定义.
+//executor = (Executor) interceptorChain.pluginAll(executor); 从这行代码可以看到,
+// 其实还是可以自己扩展的.        
+//org.apache.ibatis.plugin.InterceptorChain        
+      final Executor executor = configuration.newExecutor(tx, execType);
+// 最后 new 出了一个默认的 SqlSession 会话.
+// 该会话中存有 configuration / executor 等核心东西.        
+      return new DefaultSqlSession(configuration, executor, autoCommit);
+    } catch (Exception e) {
+      closeTransaction(tx); // may have fetched a connection so lets call close()
+      throw ExceptionFactory.wrapException("Error opening session.  Cause: " + e, e);
+    } finally {
+// 最后还是不忘记对使用过的ThreadLocal 进行remove 操作.        
+      ErrorContext.instance().reset();
+    }
+  }
+
+```
+
+至此, 可以看到 MyBatis 从SqlSessionFactory中获取出来SqlSession会话, 也可以理解为几个步骤.
+
+首先获取事务工厂, 然后再从事务工厂中获取一个事务来, JdbcTransaction 有兴趣的同学可以看下这个类,里面也是封装了写 commit / rollback等方法.  再接着获取出 执行器(Executor),这里从代码哪里看,执行器还是有几种类型的,也执行自定义. 最后new了一个 DefaultSqlSession 回去.
+
+
+
+**session.getMapper(BlogMapper.class);**
+
+  接着看,上一步返回的session,是怎么获取到我们写的Mapper接口文件(Mapper这种文件,在解析配置文件的时候,其实就已经解析到MyBatis的configuration里面去了).  
+
+
+
+```java
+@SuppressWarnings("unchecked")
+public <T> T getMapper(Class<T> type, SqlSession sqlSession) {
+ // knownMappers  中 key 是我们定义接口的Class,value是MapperProxyFactory,
+// MapperProxyFactory中的mapperInterface中存放了我们的接口class    
+  final MapperProxyFactory<T> mapperProxyFactory = (MapperProxyFactory<T>) knownMappers.get(type);
+    
+// 如果获取出来的是null,那么MyBatis就认为你传入进来的接口是不存在的,就会抛出异常来.    
+  if (mapperProxyFactory == null) {
+    throw new BindingException("Type " + type + " is not known to the MapperRegistry.");
+  }
+  try {
+// 满足条件的话,调用newInstance方法,从方法名字上看,是创建一个instance的实例.      
+    return mapperProxyFactory.newInstance(sqlSession);
+  } catch (Exception e) {
+    throw new BindingException("Error getting mapper instance. Cause: " + e, e);
+  }
+}
+
+-------------------------------------------
+// mapperProxyFactory.newInstance(sqlSession) 代码
+
+    
+  public T newInstance(SqlSession sqlSession) {
+    // new 了一个 MapperProxy对象.
+    final MapperProxy<T> mapperProxy = new MapperProxy<>(sqlSession, mapperInterface, methodCache);
+    return newInstance(mapperProxy);
+  }    
+
+// 最后可以看到使用 Proxy.newProxyInstance方法来创建的一个对象.
+  @SuppressWarnings("unchecked")
+  protected T newInstance(MapperProxy<T> mapperProxy) {
+    return (T) Proxy.newProxyInstance(mapperInterface.getClassLoader(), new Class[] { mapperInterface }, mapperProxy);
+  }
+
+
+
+-------
+// 如果你是debug模式的话,那么你可以看到BlogMapper的对象地址池在 debug 中显示的值.
+// org.apache.ibatis.binding.MapperProxy@ef9296d    
+BlogMapper blogMapper = session.getMapper(BlogMapper.class);    
+```
+
+
+
+从SqlSession 中获取 BlogMapper我们写的mapper流程, 先从 knownMappers 中根据key获取出来之前加载配置已经加载完毕的信息,如果没用的话,就会抛出没有的异常. 最后使用 Proxy.newProxyIntsance来生成的一个类似接口实现类的代码,不同的是, 在 new MapperProxy 的时候,就已经将接下来需要的信息全部传入进去.
+
+
+
+**blogMapper.selectBlog(1) 方法**
+
+  竟然 BlogMapper是通过Proxy.newInstance获取出来的,那它是怎么查询的数据库? 又是怎么将字段给映射到 Object一一对应的呢 ? 
+
+​    debug会走到 MapperProxy的invoke方法来
+
+```java
+@Override
+public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+  try {
+    if (Object.class.equals(method.getDeclaringClass())) {
+      return method.invoke(this, args);
+    } else {
+      return cachedInvoker(method).invoke(proxy, method, args, sqlSession);
+    }
+  } catch (Throwable t) {
+    throw ExceptionUtil.unwrapThrowable(t);
+  }
+}
+
+
+
+------------------
+// 通过 invoke 方法, 走 mapperMethod的execute方法,来到了这里.
+// switch 有 INSERT/UPDATE/DELETE/SELECT/FLUSH,如果这几种没有匹配到的话,就会抛出异常来.    
+  public Object execute(SqlSession sqlSession, Object[] args) {
+    Object result;
+    switch (command.getType()) {
+            
+// 不难看到 INSERT/UPDATE/DELETE都是先调用 convertArgsToSqlCommandParam 方法,
+// 也就是先将参数转化为sql,然后将执行的结果 赋值 给 result 参数.            
+      case INSERT: {
+        Object param = method.convertArgsToSqlCommandParam(args);
+        result = rowCountResult(sqlSession.insert(command.getName(), param));
+        break;
+      }
+      case UPDATE: {
+        Object param = method.convertArgsToSqlCommandParam(args);
+        result = rowCountResult(sqlSession.update(command.getName(), param));
+        break;
+      }
+      case DELETE: {
+        Object param = method.convertArgsToSqlCommandParam(args);
+        result = rowCountResult(sqlSession.delete(command.getName(), param));
+        break;
+      }
+// 如果是 select 语句,可以根据返回值来分类,如果是void&&method.hasResultHandler,就会返回null
+// 多个 / Map类型  /    Cursor 类型   /  最后查询一个        
+      case SELECT:
+        if (method.returnsVoid() && method.hasResultHandler()) {
+          executeWithResultHandler(sqlSession, args);
+          result = null;
+        } else if (method.returnsMany()) {
+          result = executeForMany(sqlSession, args);
+        } else if (method.returnsMap()) {
+          result = executeForMap(sqlSession, args);
+        } else if (method.returnsCursor()) {
+          result = executeForCursor(sqlSession, args);
+        } else {
+          Object param = method.convertArgsToSqlCommandParam(args);
+          result = sqlSession.selectOne(command.getName(), param);
+          if (method.returnsOptional()
+              && (result == null || !method.getReturnType().equals(result.getClass()))) {
+            result = Optional.ofNullable(result);
+          }
+        }
+        break;
+ // 刷新会话.           
+      case FLUSH:
+        result = sqlSession.flushStatements();
+        break;
+      default:
+        throw new BindingException("Unknown execution method for: " + command.getName());
+    }
+// 如果result 是 null, 方法返回的修饰符是private并且 返回值不是void的话,就会抛出异常.    
+    if (result == null && method.getReturnType().isPrimitive() && !method.returnsVoid()) {
+      throw new BindingException("Mapper method '" + command.getName()
+          + " attempted to return null from a method with a primitive return type (" + method.getReturnType() + ").");
+    }
+    return result;
+  }    
+
+```
+
+
+
+ 这里可以看到,先是对 INSERT / UPDATE / DELETE /  SELECT 进行分类处理, 然后对再分别根据不同的类型进行处理.  都是先有转化为sql,然后将执行结果赋值给result.
+
+  至于里面详细的查询执行sql,还有动态sql,每次会话缓存等,后面看到详细的情况再一一说明. 这里只是对MyBatis的基本工作进行了一个梳理.  然后后面再根据基础梳理,再来挨个击碎他们.
+
+
+
+至此, MyBatis的入门分析流程是结束的. 理解起来,应该还不是那么难.
