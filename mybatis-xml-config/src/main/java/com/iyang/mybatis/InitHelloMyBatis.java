@@ -10,6 +10,7 @@ import sun.misc.Launcher;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Properties;
 
 /**
  * @author Yang
@@ -29,6 +30,8 @@ public class InitHelloMyBatis {
     public static void main(String[] args) throws IOException {
 
         InputStream mybatisInputStream = Resources.getResourceAsStream("mybatis-config.xml");
+        /*Properties dbConfigProperties = new Properties();
+        dbConfigProperties.setProperty("jdbc.password","GavinYang");*/
 
         SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(mybatisInputStream);
 
