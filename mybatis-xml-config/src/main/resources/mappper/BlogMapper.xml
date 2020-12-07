@@ -6,9 +6,14 @@
 <mapper namespace="com.iyang.mybatis.mapper.BlogMapper">
 
     <!--  Query Blog By ID -->
-    <select id="selectBlog" resultType="com.iyang.mybatis.pojo.TbBlog">
+    <select id="selectBlog" resultType="TbBlog">
         select * from tb_blog where id = #{id}
     </select>
 
+    <update id="updateById">
+
+        update tb_blog set name = "123" where id = #{id};
+
+    </update>
 
 </mapper>

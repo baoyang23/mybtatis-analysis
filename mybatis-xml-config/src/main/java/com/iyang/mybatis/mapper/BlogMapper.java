@@ -16,4 +16,6 @@ public interface BlogMapper {
      */
     TbBlog selectBlog(Integer id);
 
+    Integer updateById(Integer id);
+
 }

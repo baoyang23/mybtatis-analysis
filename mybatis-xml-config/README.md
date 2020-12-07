@@ -86,6 +86,8 @@ private void propertiesElement(XNode context) throws Exception {
 
 ​      这是 MyBatis对 settings 的操作. 		
 
+​      具体的 settings 中每项配置参考官网链接 :  https://mybatis.org/mybatis-3/configuration.html#properties
+
 ```java
 // 解析 setting ---> 转化为 key /value
 Properties settings = settingsAsProperties(root.evalNode("settings"));
@@ -151,5 +153,128 @@ private void loadCustomVfs(Properties props) throws ClassNotFoundException {
     }
   }
 }
+```
+
+
+
+loadCustomLogImpl(settings) 方法
+
+
+
+```java
+private void loadCustomLogImpl(Properties props) {
+  Class<? extends Log> logImpl = resolveClass(props.getProperty("logImpl"));
+  // 将 log set 到 configuration 中去.  
+  configuration.setLogImpl(logImpl);
+}
+
+-----------------------
+// resolve 最后如果不是 null 的话,
+org.apache.ibatis.type.TypeAliasRegistry#resolveAlias
+
+ // 就会走到这里,这里可以看先是在 typeAliases(HashMap) 中判断下,如果存在就直接获取
+// 如果不存在就用 Resources.ClassForName来操作
+// 这里的 HashMap就类似于,记录之前是否已经加载了或者预热.
+// 如果是用来做cache的话, 那就应该最后会在 return 之前继续把值给放入进去.    
+  public <T> Class<T> resolveAlias(String string) {
+    try {
+      if (string == null) {
+        return null;
+      }
+      // issue #748
+      String key = string.toLowerCase(Locale.ENGLISH);
+      Class<T> value;
+      if (typeAliases.containsKey(key)) {
+        value = (Class<T>) typeAliases.get(key);
+      } else {
+        value = (Class<T>) Resources.classForName(string);
+      }
+      return value;
+    } catch (ClassNotFoundException e) {
+      throw new TypeException("Could not resolve type alias '" + string + "'.  Cause: " + e, e);
+    }
+  }    
+
+
+------------
+// 如果我们在配置文件中没有定义的话,这里默认是null,也就是说不会set进去.    
+  public void setLogImpl(Class<? extends Log> logImpl) {
+    if (logImpl != null) {
+      this.logImpl = logImpl;
+      LogFactory.useCustomLogging(this.logImpl);
+    }
+  }    
+```
+
+
+
+ **标签三 :  <typeAliases>**
+
+​     关于别名的配置.
+
+```java
+typeAliasesElement(root.evalNode("typeAliases"));
+```
+
+
+
+```java
+private void typeAliasesElement(XNode parent) {
+  if (parent != null) {
+   // 对 typeAliases 下的子标签进行迭代.
+   // 分为是 package 和非 package   
+    for (XNode child : parent.getChildren()) {
+      if ("package".equals(child.getName())) {
+       // 获取你输入的包   
+        String typeAliasPackage = child.getStringAttribute("name");
+        configuration.getTypeAliasRegistry().registerAliases(typeAliasPackage);
+      } else {
+ // <typeAlias type="com.iyang.mybatis.pojo.TbBlog" alias="TbBlog" />
+ // 这里就是对这种进行解析的         
+        String alias = child.getStringAttribute("alias");
+        String type = child.getStringAttribute("type");
+        try {
+          Class<?> clazz = Resources.classForName(type);
+   // 如果没写别名,就只传入 clazz.         
+          if (alias == null) {
+            typeAliasRegistry.registerAlias(clazz);
+          } else {
+   // 写了别名,就别名和clazz一起传入进来.           
+            typeAliasRegistry.registerAlias(alias, clazz);
+          }
+        } catch (ClassNotFoundException e) {
+          throw new BuilderException("Error registering typeAlias for '" + alias + "'. Cause: " + e, e);
+        }
+      }
+    }
+  }
+}
+
+
+----------------
+// 这里可以看到是根据 packageName 来 register进来的.    
+  public void registerAliases(String packageName, Class<?> superType) {
+    // new 一个解析器工具类
+    ResolverUtil<Class<?>> resolverUtil = new ResolverUtil<>();
+    // 获取包的path,然后获取该包下的文件,如果文件是.class结尾的话
+    // 最后在 ResolverUtil 中matchess是有该包下的全名称.
+    resolverUtil.find(new ResolverUtil.IsA(superType), packageName);
+    // 这里返回的是上一步说的 matches
+    Set<Class<? extends Class<?>>> typeSet = resolverUtil.getClasses();
+    for (Class<?> type : typeSet) {
+      // Ignore inner classes and interfaces (including package-info.java)
+      // Skip also inner classes. See issue #6
+      // 如果不是接口,不是内部类等条件的话,就走  registerAlias 方法
+      if (!type.isAnonymousClass() && !type.isInterface() && !type.isMemberClass()) {
+ // 先获取类名字,判断该类上有没有 @Alias 注解,如果有注解的话,就用注解的值作为缩写的.
+ // 最后判断是不是null,是null就会抛出异常来.最后将上面获取出来的缩写名字,转化为大写.
+ // 如果此时 typeAliases 是已经有了该值的话,就会抛出异常来.否则就放入到typeAliases来
+ // private final Map<String, Class<?>> typeAliases = new HashMap<>();
+ // 可以看到 typeAliases 是一个HashMap,并且其存储的Key/Value还是蛮明显的.         
+        registerAlias(type);
+      }
+    }
+  }    
+    
 ```
 

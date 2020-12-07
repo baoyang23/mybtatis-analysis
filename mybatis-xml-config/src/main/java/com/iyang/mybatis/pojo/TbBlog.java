@@ -1,10 +1,14 @@
 package com.iyang.mybatis.pojo;
 
+import org.apache.ibatis.type.Alias;
+
 /**
  * @author Yang
  * 当前服务 : mybatis-work-flow
  * @date 2020/12/3 / 17:19
  */
+
+//@Alias("GavinYang")
 public class TbBlog {
 
     private Integer id;

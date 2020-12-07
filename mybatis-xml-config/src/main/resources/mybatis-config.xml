@@ -33,8 +33,25 @@
         <setting name="lazyLoadTriggerMethods"  value="equals,clone,hashCode,toString"/>
         <!--<setting name="nnnnn" value="GavinYang"/>-->
     </settings>
-    
 
+    <typeAliases>
+
+        <!-- 配置别名 -->
+        <!--<package name="com.iyang.mybatis.pojo"/>-->
+
+        <typeAlias type="com.iyang.mybatis.pojo.TbBlog" alias="TbBlog" />
+        
+    </typeAliases>
+
+    <!--  添加插件的配置 -->
+    <plugins>
+        <plugin interceptor="com.iyang.mybatis.plugins.ExamplePlugin">
+            <property name="name" value="GavinYang"/>
+            <property name="age" value="22"/>
+            <property name="hobby" value="lwf"/>
+        </plugin>
+    </plugins>
+    
     <environments default="development">
         <environment id="development">
             <transactionManager type="JDBC"/>
