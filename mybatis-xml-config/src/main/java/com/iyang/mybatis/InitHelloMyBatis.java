@@ -29,6 +29,8 @@ public class InitHelloMyBatis {
      */
     public static void main(String[] args) throws IOException {
 
+
+
         InputStream mybatisInputStream = Resources.getResourceAsStream("mybatis-config.xml");
         /*Properties dbConfigProperties = new Properties();
         dbConfigProperties.setProperty("jdbc.password","GavinYang");*/

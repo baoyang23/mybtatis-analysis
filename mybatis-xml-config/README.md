@@ -278,3 +278,356 @@ private void typeAliasesElement(XNode parent) {
     
 ```
 
+
+
+**标签四  <plugins>**
+
+​    扩展的 demo 可以参考 MyBatis官网 : https://mybatis.org/mybatis-3/configuration.html
+
+​    然后看 MyBatis 是如何将插件给利用上的呢 ? 
+
+​    首先在 mybatis-config.xml 中配置好我们自己定义的 plugin
+
+​    这里以我配置了二个插件  
+
+```xml
+<plugins>
+    <plugin interceptor="com.iyang.mybatis.plugins.ExamplePlugin">
+        <property name="name" value="GavinYang"/>
+        <property name="age" value="22"/>
+        <property name="hobby" value="lwf"/>
+    </plugin>
+
+    <plugin interceptor="com.iyang.mybatis.plugins.QuerySqlPlugin">
+
+        <property name="name" value="GavinYang"/>
+    </plugin>
+</plugins>
+```
+
+
+
+  // 处理 plugin 的代码
+
+```java
+private void pluginElement(XNode parent) throws Exception {
+  // 这里传入进来的就是 <plugins>整个标签内容.  
+  if (parent != null) {
+   // 获取 <plugins> 下的 <plugin> 集合,进行迭代处理.   
+    for (XNode child : parent.getChildren()) {
+     // 获取插件的 全限定名字.   
+      String interceptor = child.getStringAttribute("interceptor");
+     // 获取我们定义在 plugin 下的 properties.   
+      Properties properties = child.getChildrenAsProperties();
+// resolveClass是最后注册到typeAliasRegistry来.    
+// 实例化,这里就可以看到我们在定义的Plugin中,无参构造函数打印出来的内容了.        
+      Interceptor interceptorInstance = (Interceptor) resolveClass(interceptor).getDeclaredConstructor().newInstance();
+// 将 properties 赋值给  interceptorInstance
+// 也就是放入到 interceptorInstance 来.        
+      interceptorInstance.setProperties(properties);
+// org.apache.ibatis.plugin.InterceptorChain
+// 这是是将interceptorInstance添加到InterceptorChain的interceptors中来.        
+      configuration.addInterceptor(interceptorInstance);
+    }
+  }
+}
+```
+
+​		可以看到 MyBatis在加载plugin的时候,是利用了反射来new出一个对象来,并且注册到 typeAliasRegistry 中来. 这里主要是解析 plugin 的配置, 后面在执行sql的时候,都是如何使用到这些 plugin 的呢 ?  肯定是有一个从InterceptorChain中获取interceptors来,然后进行处理.
+
+
+
+**标签五 :  < objectFactory >**
+
+  objectFactory  的处理方式是和 标签四相似的,只是最后在使用场景是有点不同的.
+
+  代码上的操作也是类似的.
+
+```java
+private void objectFactoryElement(XNode context) throws Exception {
+  if (context != null) {
+    String type = context.getStringAttribute("type");
+    Properties properties = context.getChildrenAsProperties();
+    ObjectFactory factory = (ObjectFactory) resolveClass(type).getDeclaredConstructor().newInstance();
+    factory.setProperties(properties);
+    configuration.setObjectFactory(factory);
+  }
+}
+```
+
+
+
+
+
+**标签五 :  <objectWrapperFactory>**
+
+   该标签在 MyBatis 官网是没有demo, 我是根据代码来顺藤摸瓜写的一个.
+
+​    参考 : org.apache.ibatis.reflection.wrapper.DefaultObjectWrapperFactory  这个源码,来模仿写的一个.
+
+```java
+objectWrapperFactoryElement(root.evalNode("objectWrapperFactory"));
+```
+
+
+
+```java
+private void objectWrapperFactoryElement(XNode context) throws Exception {
+  if (context != null) {
+   // 获取 配置文件中的type值   
+    String type = context.getStringAttribute("type");
+ // 先注册到  typeAliasRegistry 来,然后实例化这个类.
+ // 我们在自己定义的类中,写一个无参构造函数,就可以看到我们打印的内容了.     
+    ObjectWrapperFactory factory = (ObjectWrapperFactory) resolveClass(type).getDeclaredConstructor().newInstance();
+// 最后赋值到 confifuration 中来.      
+    configuration.setObjectWrapperFactory(factory);
+  }
+}
+```
+
+
+
+**标签六 : < reflectorFactory >**
+
+   处理方式和上面类似. 
+
+   这里我们自己写一个 com.iyang.mybatis.factory.GavinReflectorFactory 来继承DefaultReflectorFactory,在无参数构造函数中打印下内容, 然后debug跟进.
+
+```java
+private void reflectorFactoryElement(XNode context) throws Exception {
+  if (context != null) {
+    String type = context.getStringAttribute("type");
+    ReflectorFactory factory = (ReflectorFactory) resolveClass(type).getDeclaredConstructor().newInstance();
+    configuration.setReflectorFactory(factory);
+  }
+}
+```
+
+
+
+**标签七 : <environments>**
+
+
+
+  environments 标签都是放入一些  db 的配置信息等.
+
+```xml
+<environments default="development">
+    <environment id="development">
+        <!-- 事务 -->
+        <transactionManager type="JDBC"/>
+        
+        <!-- DB 连接配置 -->
+        <dataSource type="POOLED">
+            <property name="driver" value="${jdbc.driver}" />
+            <property name="url" value="${jdbc.url}" />
+            <property name="username" value = "${jdbc.username}" />
+            <property name="password" value="${jdbc.password}" />
+        </dataSource>
+    </environment>
+</environments>
+```
+
+```java
+private void environmentsElement(XNode context) throws Exception {
+  if (context != null) {
+    if (environment == null) {
+// 获取 default 对应字段的值         
+      environment = context.getStringAttribute("default");
+    }
+// 这里的 getChildren 获取的是 <environments> --> <environment>下的子标签      
+    for (XNode child : context.getChildren()) {
+      String id = child.getStringAttribute("id");
+// 确保 id 和  上一步的environment 的值是相同的,就会返回true.      
+      if (isSpecifiedEnvironment(id)) {
+/**
+*  获取出 transactionManager 对应的标签.
+*  然后根据 JBDC(配置文件中的值),然后从 typeAliasRegistry中获取出来，
+*  调用反射来 实例化 这个对象. 
+*  最后还是可以配置 properties,会被set到txFactory中去的.
+*  但是 JdbcTransactionFactory 好像没有重写 setProperties 方法.
+*/          
+        TransactionFactory txFactory = transactionManagerElement(child.evalNode("transactionManager"));
+// 先获取  dataSource 字段
+/**
+*  先获取type的值,然后再获取 properties的标签字段值.
+*  根据我们的配置 : org.apache.ibatis.datasource.pooled.PooledDataSourceFactory,应该会获取出这个对象.该对象其内部是有一个,org.apache.ibatis.datasource.pooled.PooledDataSource的,里面有部分默认值的.
+*最后将  properties 调用 org.apache.ibatis.datasource.unpooled.UnpooledDataSourceFactory#setProperties方法,
+最后是将 properties 里面的key/value 都设置到 MetaObject metaDataSource = SystemMetaObject.forObject(dataSource);来了.
+*/
+        DataSourceFactory dsFactory = dataSourceElement(child.evalNode("dataSource"));
+// 从  PooledDataSourceFactory 中获取 datasource 属性.         
+        DataSource dataSource = dsFactory.getDataSource();
+// 这里采用链式编程,也就是将id/txFactory/dataSource 都给set到 Environment.Builder来了.         
+        Environment.Builder environmentBuilder = new Environment.Builder(id)
+            .transactionFactory(txFactory)
+            .dataSource(dataSource);
+  //    environmentBuilder.build() 也就是new 了一个 Environment 
+  // 最后 赋值到 configuration 中来了.        
+        configuration.setEnvironment(environmentBuilder.build());
+      }
+    }
+  }
+}
+```
+
+​	解析 	environments ,利用 typeAliasRegistry 中已经注册好了的信息,然后根据名字缩写(比如JDBC)这种,来获取class对象, 用 反射来 new 一波对象出来,真是美滋滋.  接着就是解析 事务/JDBC连接配置信息等, 最后将信息保存到 DataSource 中来.  反手再来一波 链式编程 来new对象出来, 最后就是一个 Environment 对象出来,给set 到 configuration 中来.
+
+
+
+**标签八  <typeHandlers>**
+
+​	  到这里,可以看到对xml的解析操作. 先解析 标签 的值出来,然后根据值进行分类处理或者根据自己的需求来进行处理.
+
+```java
+private void typeHandlerElement(XNode parent) {
+  if (parent != null) {
+    for (XNode child : parent.getChildren()) {
+      // 如果子标签是 package   
+      if ("package".equals(child.getName())) {
+       // 获取出 name 对应的值.   
+        String typeHandlerPackage = child.getStringAttribute("name");
+      // 注册到   typeHandlerRegistry 中来.  
+        typeHandlerRegistry.register(typeHandlerPackage);
+      } else {
+ // 这里获取出三种值来,   javaType/jdbcType/  handler    
+        String javaTypeName = child.getStringAttribute("javaType");
+        String jdbcTypeName = child.getStringAttribute("jdbcType");
+        String handlerTypeName = child.getStringAttribute("handler");
+        Class<?> javaTypeClass = resolveClass(javaTypeName);
+        JdbcType jdbcType = resolveJdbcType(jdbcTypeName);
+        Class<?> typeHandlerClass = resolveClass(handlerTypeName);
+  // 分为  javaTypeClass 是不是 null 的情况       
+        if (javaTypeClass != null) {
+         // 基于 javaTypeClass 是不是 null的情况,再判断 jdbcType 是不是null  
+          if (jdbcType == null) {
+            typeHandlerRegistry.register(javaTypeClass, typeHandlerClass);
+          } else {
+            typeHandlerRegistry.register(javaTypeClass, jdbcType, typeHandlerClass);
+          }
+        } else {
+// 这是根据   handlerTypeName 注册到 typeHandlerRegistry 中来.           
+          typeHandlerRegistry.register(typeHandlerClass);
+        }
+      }
+    }
+  }
+}
+```
+
+
+
+​	
+
+  **标签九 :   <mappers>** 
+
+​    该标签是对我们对应的对象,其sql语句存放的地址. 也就是里面放入的是于mapper接口对应的方法,查询的sql语句.
+
+​    接下来看下 MyBatis 是对 mappers 标签的内容进行了说明解析和处理.
+
+```java
+private void mapperElement(XNode parent) throws Exception {
+  if (parent != null) {
+      
+ // getChildren 获取的是 mappers 下的 mapper 标签
+    for (XNode child : parent.getChildren()) {
+// 如果配置的是 package.        
+      if ("package".equals(child.getName())) {
+        String mapperPackage = child.getStringAttribute("name");
+        configuration.addMappers(mapperPackage);
+      } else {
+// 获取出    resource/url/class 这三类的值.       
+        String resource = child.getStringAttribute("resource");
+        String url = child.getStringAttribute("url");
+        String mapperClass = child.getStringAttribute("class");
+ // 对 resource 处理         
+        if (resource != null && url == null && mapperClass == null) {
+          // 将 resource 赋值给 ErrorContext 中  
+          ErrorContext.instance().resource(resource);
+     // 读取文件.       
+          InputStream inputStream = Resources.getResourceAsStream(resource);
+// 使用 XMLMapperBuilder 来对解析xml内容.            
+          XMLMapperBuilder mapperParser = new XMLMapperBuilder(inputStream, configuration, resource, configuration.getSqlFragments());
+          mapperParser.parse();
+// url 处理            
+        } else if (resource == null && url != null && mapperClass == null) {
+          ErrorContext.instance().resource(url);
+          InputStream inputStream = Resources.getUrlAsStream(url);
+          XMLMapperBuilder mapperParser = new XMLMapperBuilder(inputStream, configuration, url, configuration.getSqlFragments());
+          mapperParser.parse();
+// mapperClass 处理            
+        } else if (resource == null && url == null && mapperClass != null) {
+          Class<?> mapperInterface = Resources.classForName(mapperClass);
+          configuration.addMapper(mapperInterface);
+        } else {
+          throw new BuilderException("A mapper element may only specify a url, resource or class, but not more than one.");
+        }
+      }
+    }
+  }
+}
+
+
+
+-----------------------
+// 这里我们跟进 mapperParser.parse() 方法来
+// org.apache.ibatis.builder.xml.XMLMapperBuilder
+  public void parse() {
+  // 判断 configuration 的 loadedResources 是否含有该值,如果不含有的话,就会去解析.  
+    if (!configuration.isResourceLoaded(resource)) {
+// 对mapper 标签进行解析        
+      configurationElement(parser.evalNode("/mapper"));
+      configuration.addLoadedResource(resource);
+      bindMapperForNamespace();
+    }
+
+    parsePendingResultMaps();
+    parsePendingCacheRefs();
+    parsePendingStatements();
+  }    
+
+-----------------------------------
+//   configurationElement 方法
+
+  private void configurationElement(XNode context) {
+    try {
+ // 获取 namespace       
+      String namespace = context.getStringAttribute("namespace");
+      if (namespace == null || namespace.equals("")) {
+        throw new BuilderException("Mapper's namespace cannot be empty");
+      }
+//  MapperBuilderAssistant 将 namespace 绑定到该类的参数中来.        
+      builderAssistant.setCurrentNamespace(namespace);
+  
+   // 这里的 cache-ref / cache 都是暂时没有配置的.     
+      cacheRefElement(context.evalNode("cache-ref"));
+      cacheElement(context.evalNode("cache"));
+        
+ //  /mapper/parameterMap 也是暂时没有配置的  
+      parameterMapElement(context.evalNodes("/mapper/parameterMap"));
+        
+// resultMap 是对对象字段的映射
+// mapper/sql 是对一些公用的sql进行抽取
+// 二者暂时都没有配置        
+      resultMapElements(context.evalNodes("/mapper/resultMap"));
+      sqlElement(context.evalNodes("/mapper/sql"));
+// 获取 select / insert / update / delete 等 标签.        
+      buildStatementFromContext(context.evalNodes("select|insert|update|delete"));
+    } catch (Exception e) {
+      throw new BuilderException("Error parsing Mapper XML. The XML location is '" + resource + "'. Cause: " + e, e);
+    }
+  }    
+
+// 往下跟方法
+  private void buildStatementFromContext(List<XNode> list, String requiredDatabaseId) {
+    for (XNode context : list) {
+      final XMLStatementBuilder statementParser = new XMLStatementBuilder(configuration, builderAssistant, context, requiredDatabaseId);
+      try {
+        statementParser.parseStatementNode();
+      } catch (IncompleteElementException e) {
+        configuration.addIncompleteStatement(statementParser);
+      }
+    }
+  }
+```
+
