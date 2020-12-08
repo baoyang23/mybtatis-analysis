@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+
+    <!-- 根据相对路径指定到 properties 配置文件即可. -->
+    <properties resource="./db.properties" />
+    
+<!--    <properties>
+        <property name="jdbc.password" value="GavinYang"/>
+    </properties>-->
+
+    <!--<properties url="file:///D:\Java_DaiMa\idea_github_self\mybtatis-analysis\mybatis-xml-config\src\main\resources\db.properties" />-->
+<!--
+    <properties url="file://https://github.com/baoyang23/mybtatis-analysis/blob/master/mybatis-xml-config/src/main/resources/db.properties" />
+-->
+    <settings>
+        <setting name="cacheEnabled" value="true"/>
+        <setting name="lazyLoadingEnabled" value="true"/>
+        <setting name="multipleResultSetsEnabled" value="true"/>
+        <setting name="useColumnLabel" value="true"/>
+        <setting name="useGeneratedKeys" value="false"/>
+        <setting name="autoMappingBehavior" value="PARTIAL"/>
+        <setting name="autoMappingUnknownColumnBehavior" value="WARNING"/>
+        <setting name="defaultExecutorType" value="SIMPLE"/>
+        <setting name="defaultStatementTimeout" value="25"/>
+        <setting name="defaultFetchSize" value="100"/>
+        <setting name="safeRowBoundsEnabled" value="false"/>
+        <setting name="mapUnderscoreToCamelCase" value="false"/>
+        <setting name="localCacheScope" value="SESSION"/>
+        <setting name="jdbcTypeForNull" value="OTHER"/>
+        <setting name="lazyLoadTriggerMethods"  value="equals,clone,hashCode,toString"/>
+        <!--<setting name="nnnnn" value="GavinYang"/>-->
+    </settings>
+
+
+
+    <typeAliases>
+
+        <!-- 配置别名 -->
+        <!--<package name="com.iyang.mybatis.pojo"/>-->
+
+        <typeAlias type="com.iyang.mybatis.pojo.TbBlog" alias="TbBlog" />
+
+    </typeAliases>
+
+
+<!--    <typeHandlers>
+        <typeHandler handler="com.iyang.mybatis.handler.ExampleTypeHandler" />
+    </typeHandlers>-->
+
+    <!--  注意配置文件是有顺序性的.  -->
+    <!--<objectFactory type="com.iyang.mybatis.factory.ExampleObjectFactory">
+
+        <property name="name" value="GavinYang"/>
+    </objectFactory>
+
+    <objectWrapperFactory type="com.iyang.mybatis.factory.GavinObjectWrapperFactory"/>
+    
+    <reflectorFactory type="com.iyang.mybatis.factory.GavinReflectorFactory"/>-->
+    
+    <!--  添加插件的配置 -->
+<!--    <plugins>
+        <plugin interceptor="com.iyang.mybatis.plugins.ExamplePlugin">
+            <property name="name" value="GavinYang"/>
+            <property name="age" value="22"/>
+            <property name="hobby" value="lwf"/>
+        </plugin>
+
+        <plugin interceptor="com.iyang.mybatis.plugins.QuerySqlPlugin">
+
+            <property name="name" value="GavinYang"/>
+        </plugin>
+    </plugins>-->
+
+
+
+
+    <environments default="development">
+        <environment id="development">
+            <transactionManager type="JDBC">
+                <property name="name" value="GavinYang"/>
+            </transactionManager>
+
+            <dataSource type="POOLED">
+                <property name="driver" value="${jdbc.driver}" />
+                <property name="url" value="${jdbc.url}" />
+                <property name="username" value = "${jdbc.username}" />
+                <property name="password" value="${jdbc.password}" />
+            </dataSource>
+        </environment>
+    </environments>
+
+
+
+    <mappers>
+        <mapper resource="mappper/BlogMapper.xml"/>
+    </mappers>
+
+</configuration>

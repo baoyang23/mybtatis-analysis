@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.iyang.mybatis.mapper.BlogMapper">
+
+    <resultMap id="userAllFieldMapping" type="TbBlog">
+        <!--  column 是从数据库中查询出来的字段,  properties 是映射到 对象的字段 -->
+
+        <id property="id" column="id" />
+        <result property="name" column="name" />
+    </resultMap>
+    
+    <!--  Query Blog By ID -->
+    <select id="selectBlog" resultType="TbBlog" flushCache="false" useCache="true" >
+        select * from tb_blog where id = #{id}
+    </select>
+
+    <update id="updateById">
+
+        update tb_blog set name = "123" where id = #{id};
+
+    </update>
+
+    <insert id="insertTbBlog" parameterType="TbBlog" useGeneratedKeys="true" keyProperty="id">
+        insert into tb_blog (id,name) values
+        (#{id},#{name})
+    </insert>
+
+    <delete id="deleteById" parameterType="integer">
+        delect from tb_blog where id = #{id}
+    </delete>
+    
+</mapper>
