@@ -12,7 +12,7 @@
         <result property="name" column="name" />
     </resultMap>
 
-    <sql id="fieldCommonSql">
+    <sql id="fieldCommonSql" databaseId="gavinYangSql">
         id , name
     </sql>
 
