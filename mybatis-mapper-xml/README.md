@@ -379,7 +379,17 @@ private void buildStatementFromContext(List<XNode> list) {
 
 ​		
 
+#### 总结
 
+​		 总结下 MyBatis 解析 Mapper的xml 文件流程。 可以感受到,对于Mybatis处理Mapper,对其字段属性都是挨个解析的,还是下了很大的功夫. 
+
+​        先是有一个集合来控制是否已经解析过了,算是一种是否解析的开关配置.   可以看到其先后的解析顺序,
+
+ namespace --> cache-ref  --> cache ---> mapper/parameterMap ---> mapper/resultMap ---> mapper/sql ---> select/insert/update/detele.
+
+​       当解析这些标签的时候, 又会对标签里面的属性进行解析.  这里,主要看下我们平常使用到最多的标签, MyBatis 对这些标签解析了后,其后有是怎么利用的呢？可以看到目前MyBatis是存放在一些configuration等类信息里面,那么等到真正去查询sql语句的时候, MyBatis 又是怎么用上的呢？ 这里目前只讲了如何解析.  
+
+​      解析完了，没异常，那就是解析都ok了，剩下的就是看当 MyBatis 去查询的时候, 是怎么利用上这些资源的呢？所以看接下来的更新.
 
 
 
