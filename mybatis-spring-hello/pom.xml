@@ -49,7 +49,6 @@
 
         <dependency>
             <groupId>org.springframework</groupId>
-<<<<<<< HEAD
             <artifactId>spring-tx</artifactId>
             <version>5.2.0.RELEASE</version>
         </dependency>
@@ -74,8 +73,6 @@
 
         <dependency>
             <groupId>org.springframework</groupId>
-=======
->>>>>>> 8fc4dc29680fb8e98ff1dd0c67cb78119b0fd7e2
             <artifactId>spring-test</artifactId>
             <version>5.2.0.RELEASE</version>
         </dependency>
@@ -86,7 +83,6 @@
             <version>5.1.48</version>
         </dependency>
 
-<<<<<<< HEAD
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -97,8 +93,6 @@
     </dependencies>
 
 </project>
-=======
-    </dependencies>
 
-</project>
->>>>>>> 8fc4dc29680fb8e98ff1dd0c67cb78119b0fd7e2
+
+
