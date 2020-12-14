@@ -292,6 +292,10 @@ protected SqlSessionFactory buildSqlSessionFactory() throws Exception {
 
   BeanNameAware :   设置 beanName名字.
 
+  这里也可以按照上面的笨方法，一次对重写的方法打上断点. 然后开启我们的debug来看看方法的执行顺序.
+
+  其执行顺序 :   setBeanName   --->  setApplicationContext ---> afterPropertiesSet  --->  postProcessBeanDefinitionRegistry , 跟着这四个方法执行的顺序来看.
+
 ```java
 public class MapperScannerConfigurer
     implements BeanDefinitionRegistryPostProcessor, InitializingBean, ApplicationContextAware, BeanNameAware { }
@@ -299,9 +303,109 @@ public class MapperScannerConfigurer
 
 
 
+赋值给 beanName 值.   org.mybatis.spring.mapper.MapperScannerConfigurer#0
+
+```java
+@Override
+public void setBeanName(String name) {
+  this.beanName = name;
+}
+
+
+// 然后这里是给到 ApplicationContext. 这也就说这个类现在有了 ApplicationContext,可以根据context提供的api来进行相应的操作.
+  @Override
+  public void setApplicationContext(ApplicationContext applicationContext) {
+    this.applicationContext = applicationContext;
+  }
+
+// 检验配置包的值不能为null.
+  @Override
+  public void afterPropertiesSet() throws Exception {
+    notNull(this.basePackage, "Property 'basePackage' is required");
+  }
+
+
+
+  /**
+   * {@inheritDoc}
+   * 可以感受到这个方法, 在拿到了BeanDefinitionRegistry的情况下,往里面注册bd.
+   * @since 1.0.2
+   */
+  @Override
+  public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
+    if (this.processPropertyPlaceHolders) {
+      processPropertyPlaceHolders();
+    }
+
+// 这段是创建了一个 ClassPathMapperScanner 对象,然后往里面set属性.      
+    ClassPathMapperScanner scanner = new ClassPathMapperScanner(registry);
+    scanner.setAddToConfig(this.addToConfig);
+    scanner.setAnnotationClass(this.annotationClass);
+    scanner.setMarkerInterface(this.markerInterface);
+    scanner.setSqlSessionFactory(this.sqlSessionFactory);
+    scanner.setSqlSessionTemplate(this.sqlSessionTemplate);
+    scanner.setSqlSessionFactoryBeanName(this.sqlSessionFactoryBeanName);
+    scanner.setSqlSessionTemplateBeanName(this.sqlSessionTemplateBeanName);
+    scanner.setResourceLoader(this.applicationContext);
+    scanner.setBeanNameGenerator(this.nameGenerator);
+    scanner.setMapperFactoryBeanClass(this.mapperFactoryBeanClass);
+      
+    if (StringUtils.hasText(lazyInitialization)) {
+      scanner.setLazyInitialization(Boolean.valueOf(lazyInitialization));
+    }
+    if (StringUtils.hasText(defaultScope)) {
+      scanner.setDefaultScope(defaultScope);
+    }
+      
+// 对register里的信息进行过滤      
+    scanner.registerFilters();
+// org.springframework.context.annotation.ClassPathBeanDefinitionScanner#scan
+// 这里主要看扫描的方法. 根据,来切割我们写的 basePackage 信息.扫描类的信息,最后还是借用了 org.springframework.context.annotation.ClassPathBeanDefinitionScanner#doScan 来进行扫描的. //  doScan(basePackages) 是对 xml 进行扫描的.
+// AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry); 是对注解进行扫描的.
+// 最后返回注册到 Spring 容器中的 bean 个数
+// 所以如果我们配置了下面的标签,那么在这里都会被扫描到并且注册到Spring容器中.
+//     <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+//        <property name="basePackage" value="com.iyang.sm.mapper" ></property>
+//    </bean>
+// 这里需要注意的是:  org.mybatis.spring.mapper.ClassPathMapperScanner#processBeanDefinitions
+//   definition.setBeanClass(this.mapperFactoryBeanClass);  这里的这行代码,是给bd的beanClass给换成了 MapperFactoryBean.class , 
+//  definition.getConstructorArgumentValues().addGenericArgumentValue(beanClassName);     // 这句代码,将 beanClassName 给到 db之后, 然后就才用 beanClassName来new一个 MapperFactoryBean 对象来, 所以这里并不是使用无参构造函数.
+// 也许会问,怎么证实没有走无参数构造函数呢 ? 而是去走的 set 方法呢 ? 
+// 再不能动源码的情况下, 面对这种情况情况最好的办法就是, 在无参构造函数上打上断点.
+// 如果没走到断点上,那就说明不是走的无参构造函数来初始化的.      
+    scanner.scan(
+        StringUtils.tokenizeToStringArray(this.basePackage, ConfigurableApplicationContext.CONFIG_LOCATION_DELIMITERS));
+  }
+
+```
+
+
+
+  所以到这里, 可以看到 MyBatis 与 Spring 整合的过程就已经完成了.
+
+  我们这里是主要对 SqlSessionFactoryBean 和 MapperScannerConfigurer 来进行分析的, 可以很明显的感觉到,我们是配置好这二个bean后,就可以使用了.  着重看第二个,  org.mybatis.spring.mapper.MapperScannerConfigurer 这个bean,就是做了如何将 MyBatis 的 mapper接口文件给加载到 Spring 中来的.   **那么这里我在想, 如果有天我自己开发出一个好用的框架来,要与 Spring 进行整合的话,是不是也这样整合就可以了？**
+
+```xml
+<!-- 配置sqlSessionFactory，SqlSessionFactoryBean是用来产生sqlSessionFactory的 -->
+<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+    <!-- 加载mybatis的全局配置文件，放在classpath下的mybatis文件夹中了 -->
+    <property name="configLocation" value="mybatis/SqlMapConfig.xml" />
+    <!-- 加载数据源，使用上面配置好的数据源 -->
+    <property name="dataSource" ref="dataSource" />
+</bean>
+
+<!--  配置扫描 MyBatis 接口的包 -->
+<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+    <property name="basePackage" value="com.iyang.sm.mapper" ></property>
+</bean>
+```
 
 
 
 
 
+####  总结
 
+​    可以看到  MyBatis 与 Spring 整合后,  对于解析 MyBatis 的 mapper 配置文件等，都是走的之前单个 mybatis 的逻辑, 是没有什么变化的.   主要的是将 , SqlSessionFactory 和 Mapper.class(接口类) 给注入到 Spring 容器中.然后接口的话, 是怎么使用的代理类来进行实例化完后, 将对象给注入到 Spring 容器中的呢 ？ 这里看  org.mybatis.spring.mapper.MapperScannerConfigurer 做的事情就明白了. 
+
+​    不过在看 mybatis 与 Spring 整合的时候, 还是建议要有对 BeanDefinitionRegistryPostProcessor  /  InitializingBean /  ApplicationContextAware  /  BeanNameAware 有一定的了接.  就是有了了解后, 你就会很明显的感受到， mybatis 为什么是实现这个接口，实现这个接口并且重写这个方法，在后面是什么时候被调用的. 意思也就是，你至少得明白点 Spring 对外提供的一些扩展点，才能很好的理解这些东西.
