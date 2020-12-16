@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.iyang.mybatis.mapper.BlogMapper">
+
+    <!--  Query Blog By ID -->
+    <select id="selectBlog" resultType="com.iyang.mybatis.pojo.TbBlog">
+        select * from tb_blog where id = #{id}
+    </select>
+
+    <insert id="addBlog">
+        insert into tb_blog (name) values(#{name})
+    </insert>
+
+    <update id="updateHashCode">
+        update tb_blog set name = #{name} where id = 1;
+    </update>
+
+</mapper>
