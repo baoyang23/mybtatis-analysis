@@ -5,8 +5,10 @@
 
 <mapper namespace="com.iyang.mybatis.mapper.BlogMapper">
 
+    <cache />
+
     <!--  Query Blog By ID -->
-    <select id="selectBlog" resultType="com.iyang.mybatis.pojo.TbBlog">
+    <select id="selectBlog" resultType="com.iyang.mybatis.pojo.TbBlog" useCache="true">
         select * from tb_blog where id = #{id}
     </select>
 

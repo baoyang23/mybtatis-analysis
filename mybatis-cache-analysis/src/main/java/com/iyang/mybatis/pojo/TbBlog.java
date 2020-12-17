@@ -1,11 +1,13 @@
 package com.iyang.mybatis.pojo;
 
+import java.io.Serializable;
+
 /**
  * @author Yang
  * 当前服务 : mybatis-work-flow
  * @date 2020/12/3 / 17:19
  */
-public class TbBlog {
+public class TbBlog implements Serializable {
 
     private Integer id;
     private String name;

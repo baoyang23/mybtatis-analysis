@@ -169,17 +169,216 @@ MyBatis 的一级缓存的是跟随  SqlSession 的，这里是可以根据简�
 
 #### 二级缓存
 
-​     可以看到一级缓存的话，是局限于 SqlSession . 如果要多个 sqlSession 之间共享缓存的话，就需要开启二级缓存.
+​     可以看到一级缓存的话，是局限于 SqlSession . 如果要多个 sqlSession 之间共享缓存的话，就需要开启二级缓存.   开启的话,我们在 MyBatis 配置文件中加上:
+
+```xml
+<settings>
+    <setting name="logImpl" value="STDOUT_LOGGING"/>
+
+    <!-- 开启二级缓存 -->
+    <setting name="cacheEnabled" value="true"/>
+</settings>
+```
 
 
 
+​	**案例一 :  是否提交事务**
+
+```java
+public static void main(String[] args) throws Exception {
+
+    InputStream mybatisInputStream = Resources.getResourceAsStream("mybatis-config.xml");
+    SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(mybatisInputStream);
+    SqlSession sqlSession1 = sqlSessionFactory.openSession(true);
+    SqlSession sqlSession2 = sqlSessionFactory.openSession(true);
+
+    BlogMapper blogMapper1 = sqlSession1.getMapper(BlogMapper.class);
+    BlogMapper blogMapper2 = sqlSession2.getMapper(BlogMapper.class);
+
+    System.out.println("blogMapper1 获取数据" + blogMapper1.selectBlog(1));
+    
+    // sqlSession1.commit();
+    
+    System.out.println("blogMapper2 获取数据" + blogMapper2.selectBlog(1));
+
+}
+
+//   ----------------   true结果   -----------------------
+
+Created connection 492079624.
+==>  Preparing: select * from tb_blog where id = ? 
+==> Parameters: 1(Integer)
+<==    Columns: id, name
+<==        Row: 1, 6565
+<==      Total: 1
+blogMapper1 获取数据TbBlog{id=1, name='6565'}
+Opening JDBC Connection
+    
+Created connection 433287555.
+==>  Preparing: select * from tb_blog where id = ? 
+==> Parameters: 1(Integer)
+<==    Columns: id, name
+<==        Row: 1, 6565
+<==      Total: 1
+blogMapper2 获取数据TbBlog{id=1, name='6565'}    
+    
+
+// ------------   加上commit()方法结果   ---------------
+
+Created connection 630074945.
+==>  Preparing: select * from tb_blog where id = ? 
+==> Parameters: 1(Integer)
+<==    Columns: id, name
+<==        Row: 1, 6565
+<==      Total: 1
+blogMapper1 获取数据TbBlog{id=1, name='6565'}
+Cache Hit Ratio [com.iyang.mybatis.mapper.BlogMapper]: 0.5
+blogMapper2 获取数据TbBlog{id=1, name='6565'}
+```
+
+​	从这里看, 是否提交事务可以看出来，是会影响二级缓存的.
 
 
 
+  **案例二 :  中间穿插更新语句** 
 
-#### 总结
+```java
+public static void main(String[] args)  throws Exception {
+
+    InputStream mybatisInputStream = Resources.getResourceAsStream("mybatis-config.xml");
+    SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(mybatisInputStream);
+    SqlSession sqlSession1 = sqlSessionFactory.openSession(false);
+    SqlSession sqlSession2 = sqlSessionFactory.openSession(false);
+    SqlSession sqlSession3 = sqlSessionFactory.openSession(false);
+
+    BlogMapper blogMapper1 = sqlSession1.getMapper(BlogMapper.class);
+    BlogMapper blogMapper2 = sqlSession2.getMapper(BlogMapper.class);
+    BlogMapper blogMapper3 = sqlSession3.getMapper(BlogMapper.class);
+
+    System.out.println(" blogMapper1 查询出来的数据 : " + blogMapper1.selectBlog(1));
+    sqlSession1.commit();
+
+    System.out.println(" blogMapper2 查询出来的结果 : " + blogMapper2.selectBlog(1));
+
+    System.out.println(blogMapper3.updateHashCode("GavinYang"));
+    sqlSession3.commit();
+
+    System.out.println(" blogMapper2 查询出来的结果 : " + blogMapper2.selectBlog(1));
+}
+
+//  ------------------  打印结果 ------
+
+Created connection 630074945.
+Setting autocommit to false on JDBC Connection [com.mysql.jdbc.JDBC4Connection@258e2e41]
+==>  Preparing: select * from tb_blog where id = ? 
+==> Parameters: 1(Integer)
+<==    Columns: id, name
+<==        Row: 1, 6565
+<==      Total: 1
+ blogMapper1 查询出来的数据 : TbBlog{id=1, name='6565'}
+Cache Hit Ratio [com.iyang.mybatis.mapper.BlogMapper]: 0.5
+ blogMapper2 查询出来的结果 : TbBlog{id=1, name='6565'}
+
+Created connection 603443293.
+Setting autocommit to false on JDBC Connection [com.mysql.jdbc.JDBC4Connection@23f7d05d]
+==>  Preparing: update tb_blog set name = ? where id = 1; 
+==> Parameters: GavinYang(String)
+<==    Updates: 1
+1
+Committing JDBC Connection [com.mysql.jdbc.JDBC4Connection@23f7d05d]
+Cache Hit Ratio [com.iyang.mybatis.mapper.BlogMapper]: 0.3333333333333333
+Opening JDBC Connection
+    
+    
+Created connection 707976812.
+Setting autocommit to false on JDBC Connection [com.mysql.jdbc.JDBC4Connection@2a32de6c]
+==>  Preparing: select * from tb_blog where id = ? 
+==> Parameters: 1(Integer)
+<==    Columns: id, name
+<==        Row: 1, GavinYang
+<==      Total: 1
+ blogMapper2 查询出来的结果 : TbBlog{id=1, name='GavinYang'}    
+```
+
+ 这里是可以看到在更新之后并且 commit 了事务之后，后面紧跟的 sql 是去查询 数据库了的.   所以这里是可以看出来，update等操作是会去 清空对应的缓存的。
 
 
+
+这里我们根据 案例一 的情况来分析，在开启了 二级缓存 的时候，是从哪里获取出来的数据的呢？
+
+debug 跟进来 :    org.apache.ibatis.executor.CachingExecutor#query(org.apache.ibatis.mapping.MappedStatement, java.lang.Object, org.apache.ibatis.session.RowBounds, org.apache.ibatis.session.ResultHandler, org.apache.ibatis.cache.CacheKey, org.apache.ibatis.mapping.BoundSql)
+
+```java
+@Override
+public <E> List<E> query(MappedStatement ms, Object parameterObject, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql)
+    throws SQLException {
+  Cache cache = ms.getCache();
+  if (cache != null) {
+    flushCacheIfRequired(ms);
+    if (ms.isUseCache() && resultHandler == null) {
+      ensureNoOutParams(ms, boundSql);
+      @SuppressWarnings("unchecked")
+// debug 到这里，可以看到,就已经返回了我们需要的数据.        
+      List<E> list = (List<E>) tcm.getObject(cache, key);
+      if (list == null) {
+        list = delegate.query(ms, parameterObject, rowBounds, resultHandler, key, boundSql);
+        tcm.putObject(cache, key, list); // issue #578 and #116
+      }
+      return list;
+    }
+  }
+  return delegate.query(ms, parameterObject, rowBounds, resultHandler, key, boundSql);
+}
+```
+
+ org.apache.ibatis.executor.CachingExecutor#tcm  调用这个对象的 getObject 方法获取到了我们需要的值, 跟进来又从 org.apache.ibatis.cache.decorators.TransactionalCache 的 getObject 获取出我们的值, 最后从  org.apache.ibatis.cache.decorators.TransactionalCache#delegate 获取出值, 返回回来的.
+
+
+
+org.apache.ibatis.cache.decorators.TransactionalCache#getObject
+
+```java
+@Override
+public Object getObject(Object key) {
+  // issue #116
+// 从缓存中获取出值.    
+  Object object = delegate.getObject(key);
+  if (object == null) {
+// 如果获取出来是null,也就是缓存中没有的话,org.apache.ibatis.cache.decorators.TransactionalCache#entriesMissedInCache 就添加到这个集合中来.      
+    entriesMissedInCache.add(key);
+  }
+  // issue #146
+// commit 后需要 clear 的话，就会返回 null.
+// 这里想下这个变量会不会和我门案例二中的 update 操作有关系呢？
+// 这里再 update后再 debug 发现,  delegate 中获取出来的是 null ,也就是确实是获取不到缓存了
+// 和这个参数没关系.    
+  if (clearOnCommit) {
+    return null;
+  } else {
+    return object;
+  }
+}
+```
+
+
+
+MyBatis 二级缓存不适应于配置文件中存在多表查询的情况. 一般我们是单表的 cache, 由于 mybatis 的二级缓存是基于 namespace 的, 多表查询语句所在的 namespace 无法感应到其他的 namespace 中的语句对多表中设计修改，就会引发脏数据.  这个时候，可以采用 cache-ref 来做处理，但是这样的话,缓存的颗粒度就变粗了.
+
+
+
+执行流程 :  如果开启了二级缓存的话， MyBatis 会先走二级缓存，如果二级缓存没有的话，就会去一级缓存看看，如果都没有的话，就去查询数据库.
+
+
+
+二级缓存 :  用  org.apache.ibatis.executor.CachingExecutor 装饰了  org.apache.ibatis.executor.BaseExecutor 的子类, 委托具体职责给 delegate 之前，实现了二级缓存的查询和写入功能.
+
+
+
+#### 总结 
+
+ 最后看 一级缓存和二级缓存，都是利用的 HashMap 这种来做到本地缓存， 只是二级缓存的作用范围比起一级缓存的话，是要大的，并且也利用了一些 装饰者 等设计模式来设计二级缓存的.  
+
+  如果是部署的分布式项目的话，那么还是 得切换到 redis 这种缓存来了， 本地利用 HashMap 这种缓存满足不了的.
 
 文献参考地址 : https://tech.meituan.com/2018/01/19/mybatis-cache.html
 
