@@ -225,5 +225,5 @@ public Object execute(SqlSession sqlSession, Object[] args) {
 
   
 
-​    最后返回的 result 就是我们 blogMapper.selectBlog() 方法 的返回值. 
+​    最后返回的 result 就是我们 blogMapper.selectBlog() 方法 的返回值.  所以到
 
